@@ -3,6 +3,7 @@ services:
     build: .
     container_name: xray-bot
     restart: unless-stopped
+    network_mode: "host"
     volumes:
       - .:/app
     env_file:
