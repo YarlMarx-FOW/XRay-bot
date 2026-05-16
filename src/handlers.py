@@ -28,6 +28,14 @@ router = Router()
 
 MAX_MESSAGE_LENGTH = 4096
 
+# Работаем без платёжки пока что
+REQUISITES_TEXT = (
+    "💳 **Реквизиты для оплаты:**\n\n"
+    "• **Crypto (USDT TRC20):** `КОШЕЛЁК`\n"
+    "• **Перевод на карту:** `НОМЕР_КАРТЫ`\n\n"
+    "⚠️ Переводите точную сумму. После перевода обязательно нажмите кнопку ниже, чтобы администратор подтвердил транзакцию."
+)
+
 class AdminStates(StatesGroup):
     ADD_TIME = State()
     REMOVE_TIME = State()
@@ -77,7 +85,7 @@ async def show_menu(bot: Bot, chat_id: int, message_id: int = None):
     builder.button(text="💵 Продлить" if status=="Активна" else "💵 Оплатить", callback_data="renew_sub")
     builder.button(text="✅ Подключить", callback_data="connect")
     builder.button(text="📊 Статистика", callback_data="stats")
-    builder.button(text="ℹ️ Помощь", callback_data="help")
+    builder.button(text="ℹ️ Информация", callback_data="help")
     
     if user.is_admin:
         builder.button(text="⚠️ Админ. меню", callback_data="admin_menu")
@@ -167,19 +175,135 @@ async def help_msg(callback: CallbackQuery):
     builder = InlineKeyboardBuilder()
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
     text = (
-        f"О боте:\n"
+        "Это бот для SWAGAVPN. Кредиты ниже.\n"
         "<b>Разработчики:</b>\n"
         "@QueenDekim | @cpn_moris\n"
         "<i>Отдельное спасибо</i> @ascento <i>за помощь в разработке</i>\n"
+        "Я же выражаю личную благодарность всем контрибьютерам, т.к. благодаря им мне не нужно писать отдельного бота."
         #"<a href='https://t.me/+OJsul9nc9hYzZjEy'>Официальный чат проекта</a>"
     )
     await callback.message.edit_text(text, parse_mode='HTML', reply_markup=builder.as_markup())
 
+# =====================================================================
+# ===     БЛОК АВТОМАТИЧЕСКОЙ ОПЛАТЫ (ВРЕМЕННО ЗАКОММЕНТИРОВАН)     ===
+# =====================================================================
+#
+# @router.callback_query(F.data == "renew_sub")
+# async def renew_subscription(callback: CallbackQuery):
+#     builder = InlineKeyboardBuilder()
+#
+#     # Добавляем кнопки для каждого варианта подписки
+#     for months in sorted(config.PRICES.keys()):
+#         price_info = config.PRICES[months]
+#         final_price = config.calculate_price(months)
+#
+#         discount_text = ""
+#         if price_info["discount_percent"] > 0:
+#             discount_text = f" (-{price_info['discount_percent']}%)"
+#
+#         button_text = f"{months} мес. - {final_price} руб.{discount_text}"
+#         builder.button(text=button_text, callback_data=f"pay_{months}")
+#
+#     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
+#     builder.adjust(1)
+#
+#     await callback.message.edit_text(
+#         "💵 **Выберите период подписки:**",
+#         reply_markup=builder.as_markup(),
+#         parse_mode='Markdown'
+#     )
+#
+# @router.callback_query(F.data.startswith("pay_"))
+# async def process_payment(callback: CallbackQuery, bot: Bot):
+#     await callback.answer()
+#
+#     try:
+#         months = int(callback.data.split("_")[1])
+#         if months not in config.PRICES:
+#             await callback.message.answer("❌ Неверный период подписки")
+#             return
+#
+#         final_price = config.calculate_price(months)
+#         suffix = "месяц" if months == 1 else "месяца" if months in (2,3,4) else "месяцев"
+#         # Создаем инвойс для оплаты
+#         prices = [LabeledPrice(label=f"VPN подписка на {months} мес.", amount=final_price * 100)]
+#         if config.PAYMENT_TOKEN:
+#             await bot.send_invoice(
+#                 chat_id=callback.from_user.id,
+#                 title=f"VPN подписка на {months} месяцев",
+#                 description=f"Доступ к VPN сервису на {months} {suffix}",
+#                 payload=f"subscription_{months}",
+#                 provider_token=config.PAYMENT_TOKEN,
+#                 currency="RUB",
+#                 prices=prices,
+#                 start_parameter="create_subscription",
+#                 need_email=True,
+#                 need_phone_number=False
+#             )
+#         else:
+#             await callback.message.answer("❌ Оплата временно недоступна")
+#     except Exception as e:
+#         logger.error(f"🛑 Payment error: {e}")
+#         await callback.message.answer("❌ Ошибка при создании счета на оплату")
+#
+# @router.pre_checkout_query()
+# async def process_pre_checkout_query(pre_checkout_query: PreCheckoutQuery, bot: Bot):
+#     await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+#
+# @router.message(F.successful_payment)
+# async def process_successful_payment(message: Message, bot: Bot):
+#     try:
+#         # Извлекаем информацию из payload
+#         payload = message.successful_payment.invoice_payload
+#         if payload.startswith("subscription_"):
+#             months = int(payload.split("_")[1])
+#             final_price = config.calculate_price(months)  # Переводим обратно в рубли
+#
+#             # Получаем информацию о пользователе
+#             user = await get_user(message.from_user.id)
+#             if not user:
+#                 await message.answer("❌ Ошибка: пользователь не найден")
+#                 return
+#
+#             # Определяем тип действия (покупка или продление)
+#             now = datetime.utcnow()
+#             action_type = "продлена" if user.subscription_end > now else "куплена"
+#
+#             # Обновляем подписку
+#             success = await update_subscription(message.from_user.id, months)
+#             suffix = "месяц" if months == 1 else "месяца" if months in (2,3,4) else "месяцев"
+#             if success:
+#                 await message.answer(
+#                     f"✅ Оплата прошла успешно! Ваша подписка {action_type} на {months} {suffix}.\n\n"
+#                     "Спасибо за покупку! 🎉"
+#                 )
+#
+#                 # Отправляем уведомление администраторам
+#                 admin_message = (
+#                     f"{action_type.capitalize()} подписка пользователем "
+#                     f"`{user.full_name}` | `{user.telegram_id}` "
+#                     f"на {months} {suffix} - {final_price}₽"
+#                 )
+#
+#                 for admin_id in config.ADMINS:
+#                     try:
+#                         await bot.send_message(admin_id, admin_message, parse_mode='Markdown')
+#                     except Exception as e:
+#                         logger.error(f"🛑 Failed to send notification to admin {admin_id}: {e}")
+#             else:
+#                 await message.answer("❌ Ошибка при обновлении подписки")
+#     except Exception as e:
+#         logger.error(f"🛑 Successful payment processing error: {e}")
+#         await message.answer("❌ Ошибка при обработке платежа")
+#=========================================================================================================================
+
+# =====================================================================
+# ===         БЛОК РУЧНОЙ ОПЛАТЫ (АКТИВНЫЙ В ДАННЫЙ МОМЕНТ)         ===
+# =====================================================================
 @router.callback_query(F.data == "renew_sub")
-async def renew_subscription(callback: CallbackQuery):
+async def renew_subscription_manual(callback: CallbackQuery):
     builder = InlineKeyboardBuilder()
     
-    # Добавляем кнопки для каждого варианта подписки
     for months in sorted(config.PRICES.keys()):
         price_info = config.PRICES[months]
         final_price = config.calculate_price(months)
@@ -189,7 +313,7 @@ async def renew_subscription(callback: CallbackQuery):
             discount_text = f" (-{price_info['discount_percent']}%)"
             
         button_text = f"{months} мес. - {final_price} руб.{discount_text}"
-        builder.button(text=button_text, callback_data=f"pay_{months}")
+        builder.button(text=button_text, callback_data=f"pay_manual_{months}")
     
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
     builder.adjust(1)
@@ -200,88 +324,62 @@ async def renew_subscription(callback: CallbackQuery):
         parse_mode='Markdown'
     )
 
-@router.callback_query(F.data.startswith("pay_"))
-async def process_payment(callback: CallbackQuery, bot: Bot):
+@router.callback_query(F.data.startswith("pay_manual_"))
+async def process_manual_payment_info(callback: CallbackQuery):
     await callback.answer()
+    months = int(callback.data.split("_")[2])
+    final_price = config.calculate_price(months)
+    suffix = "месяц" if months == 1 else "месяца" if months in (2,3,4) else "месяцев"
     
-    try:
-        months = int(callback.data.split("_")[1])
-        if months not in config.PRICES:
-            await callback.message.answer("❌ Неверный период подписки")
-            return
-            
-        final_price = config.calculate_price(months)
-        suffix = "месяц" if months == 1 else "месяца" if months in (2,3,4) else "месяцев"
-        # Создаем инвойс для оплаты
-        prices = [LabeledPrice(label=f"VPN подписка на {months} мес.", amount=final_price * 100)]
-        if config.PAYMENT_TOKEN:
-            await bot.send_invoice(
-                chat_id=callback.from_user.id,
-                title=f"VPN подписка на {months} месяцев",
-                description=f"Доступ к VPN сервису на {months} {suffix}",
-                payload=f"subscription_{months}",
-                provider_token=config.PAYMENT_TOKEN,
-                currency="RUB",
-                prices=prices,
-                start_parameter="create_subscription",
-                need_email=True,
-                need_phone_number=False
-            )
-        else:
-            await callback.message.answer("❌ Оплата временно недоступна")
-    except Exception as e:
-        logger.error(f"🛑 Payment error: {e}")
-        await callback.message.answer("❌ Ошибка при создании счета на оплату")
+    text = (
+        f"🛒 **Оформление подписки на {months} {suffix}**\n"
+        f"💰 Сумма к оплате: `{final_price} руб.`\n\n"
+        f"{REQUISITES_TEXT}"
+    )
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✅ Я перевел средства", callback_data=f"confirm_transfer_{months}_{final_price}")
+    builder.button(text="⬅️ Назад", callback_data="renew_sub")
+    builder.adjust(1)
+    
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode='Markdown')
 
-@router.pre_checkout_query()
-async def process_pre_checkout_query(pre_checkout_query: PreCheckoutQuery, bot: Bot):
-    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+@router.callback_query(F.data.startswith("confirm_transfer_"))
+async def confirm_transfer_request(callback: CallbackQuery, bot: Bot):
+    await callback.answer()
+    parts = callback.data.split("_")
+    months = int(parts[2])
+    price = int(parts[3])
+    
+    user_id = callback.from_user.id
+    username = f"@{callback.from_user.username}" if callback.from_user.username else "Нет юзернейма"
+    full_name = callback.from_user.full_name
+    
+    # Сообщение пользователю
+    await callback.message.edit_text(
+        "⏳ **Заявка отправлена администратору!**\n\n"
+        "Мы проверяем поступление средств вручную. Обычно это занимает от 5 до 15 минут. "
+        "Вам придет уведомление от бота, как только подписка будет активирована.",
+        parse_mode='Markdown'
+    )
+    
+    # Сборка сообщения для админов
+    admin_msg = (
+        "⚠️ **ПОСТУПИЛА ЗАЯВКА НА VPN** ⚠️\n\n"
+        f"👤 **Пользователь:** {full_name} ({username})\n"
+        f"🆔 **ID:** `{user_id}`\n"
+        f"📦 **Тариф:** {months} мес.\n"
+        f"💵 **Сумма:** {price} руб.\n\n"
+        f"Перейдите в `Админ. меню` -> `+ время`, укажите ID `{user_id}` и добавьте купленный период."
+    )
+    
+    for admin_id in config.ADMINS:
+        try:
+            await bot.send_message(admin_id, admin_msg, parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"🛑 Не удалось отправить уведомление админу {admin_id}: {e}")
+#=========================================================================================================================
 
-@router.message(F.successful_payment)
-async def process_successful_payment(message: Message, bot: Bot):
-    try:
-        # Извлекаем информацию из payload
-        payload = message.successful_payment.invoice_payload
-        if payload.startswith("subscription_"):
-            months = int(payload.split("_")[1])
-            final_price = config.calculate_price(months)  # Переводим обратно в рубли
-            
-            # Получаем информацию о пользователе
-            user = await get_user(message.from_user.id)
-            if not user:
-                await message.answer("❌ Ошибка: пользователь не найден")
-                return
-            
-            # Определяем тип действия (покупка или продление)
-            now = datetime.utcnow()
-            action_type = "продлена" if user.subscription_end > now else "куплена"
-            
-            # Обновляем подписку
-            success = await update_subscription(message.from_user.id, months)
-            suffix = "месяц" if months == 1 else "месяца" if months in (2,3,4) else "месяцев"
-            if success:
-                await message.answer(
-                    f"✅ Оплата прошла успешно! Ваша подписка {action_type} на {months} {suffix}.\n\n"
-                    "Спасибо за покупку! 🎉"
-                )
-                
-                # Отправляем уведомление администраторам
-                admin_message = (
-                    f"{action_type.capitalize()} подписка пользователем "
-                    f"`{user.full_name}` | `{user.telegram_id}` "
-                    f"на {months} {suffix} - {final_price}₽"
-                )
-                
-                for admin_id in config.ADMINS:
-                    try:
-                        await bot.send_message(admin_id, admin_message, parse_mode='Markdown')
-                    except Exception as e:
-                        logger.error(f"🛑 Failed to send notification to admin {admin_id}: {e}")
-            else:
-                await message.answer("❌ Ошибка при обновлении подписки")
-    except Exception as e:
-        logger.error(f"🛑 Successful payment processing error: {e}")
-        await message.answer("❌ Ошибка при обработке платежа")
 
 @router.callback_query(F.data == "admin_menu")
 async def admin_menu(callback: CallbackQuery):
@@ -291,8 +389,8 @@ async def admin_menu(callback: CallbackQuery):
         return
     
     total, with_sub, without_sub = await db_user_stats()
-    online_count = await get_online_users()
-    
+    # online_count = await get_online_users()
+    online_count = 0
     text = (
         "**Административное меню**\n\n"
         f"**Всего пользователей**: `{total}`\n"
@@ -329,7 +427,7 @@ async def admin_add_time_user(message: Message, state: FSMContext):
         await message.answer("Ошибка: ID должен быть числом")
 
 @router.message(AdminStates.ADD_TIME_AMOUNT)
-async def admin_add_time_amount(message: Message, state: FSMContext):
+async def admin_add_time_amount(message: Message, state: FSMContext, bot: Bot):
     data = await state.get_data()
     user_id = data['user_id']
     parts = message.text.split()
@@ -358,6 +456,18 @@ async def admin_add_time_amount(message: Message, state: FSMContext):
                 await message.answer(f"✅ Добавлено время пользователю {user_id}")
             else:
                 await message.answer("❌ Пользователь не найден")
+
+            try:
+                await bot.send_message(
+                    user_id, 
+                    "🎉 **Ваша подписка успешно активирована/продлена!**\n\n"
+                    "Если вы уже добавляли подписку в приложение, просто **обновите её**. "
+                    "Если подключаетесь впервые, перейдите в меню бота и нажмите **'✅ Подключить'**.",
+                    parse_mode='Markdown'
+                    )
+            except Exception as e:
+                    logger.error(f"🛑 Не удалось отправить уведомление пользователю {user_id}: {e}")
+
     except Exception as e:
         await message.answer(f"Ошибка: {str(e)}")
     finally:
@@ -669,6 +779,7 @@ async def connect_profile(callback: CallbackQuery):
     if not profile_data:
         await callback.message.answer("⚠️ У вас пока нет созданного профиля.")
         return
+    # Генерация стандартного vless для создания ссылки на подписку
     vless_url = generate_vless_url(profile_data)
     sub_id = profile_data.get("sub_id")
     sub_url = generate_sub_url(sub_id) if sub_id else vless_url
@@ -696,9 +807,9 @@ async def connect_profile(callback: CallbackQuery):
     )
 
     builder = InlineKeyboardBuilder()
-    # builder.button(text='🖥️ Windows [V2RayN]', url='https://github.com/2dust/v2rayN/releases/download/7.13.8/v2rayN-windows-64-desktop.zip')
-    # builder.button(text='🐧 Linux [NekoBox]', url='https://github.com/MatsuriDayo/nekoray/releases/download/4.0.1/nekoray-4.0.1-2024-12-12-debian-x64.deb')
-    # builder.button(text='🍎 Mac [V2RayU]', url='https://github.com/yanue/V2rayU/releases/download/v4.2.6/V2rayU-64.dmg ')
+    builder.button(text='🖥️ Windows [V2RayN]', url='https://github.com/2dust/v2rayN/releases/download/7.13.8/v2rayN-windows-64-desktop.zip')
+    builder.button(text='🐧 Linux [NekoBox]', url='https://github.com/MatsuriDayo/nekoray/releases/download/4.0.1/nekoray-4.0.1-2024-12-12-debian-x64.deb')
+    builder.button(text='🍎 Mac [V2RayU]', url='https://github.com/yanue/V2rayU/releases/download/v4.2.6/V2rayU-64.dmg ')
     builder.button(text='🍏 iOS [V2RayTun]', url='https://apps.apple.com/ru/app/v2raytun/id6476628951')
     builder.button(text='🍏 iOS [Happ]', url='https://apps.apple.com/us/app/happ-proxy-utility/id6504287215')
     builder.button(text='🤖 Android [V2RayNG]', url='https://github.com/2dust/v2rayNG/releases/download/1.10.16/v2rayNG_1.10.16_arm64-v8a.apk')
