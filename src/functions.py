@@ -363,8 +363,7 @@ class XUIAPI:
                 "protocol": inbound["protocol"],
                 "settings": json.dumps(settings, indent=2),
                 "streamSettings": inbound["streamSettings"],
-                "sniffing": inbound["sniffing"],
-                "allocate": inbound["allocate"]
+                "sniffing": inbound["sniffing"]
             }
             
             return await self.update_inbound(config.INBOUND_ID, update_data)
