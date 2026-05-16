@@ -78,7 +78,7 @@ class XUIAPI:
             base_path = config.XUI_BASE_PATH.strip('/')
             if base_path:
                 base_url = f"{base_url}/{base_path}"
-            url = f"{base_url}/api/inbounds/get/{inbound_id}"
+            url = f"{base_url}/panel/api/inbounds/get/{inbound_id}"
             
             logger.info(f"ℹ️  Getting inbound data from: {url}")
             logger.debug(f"⚙️ Using cookies: {self.cookie_jar}")
@@ -115,7 +115,7 @@ class XUIAPI:
             base_path = config.XUI_BASE_PATH.strip('/')
             if base_path:
                 base_url = f"{base_url}/{base_path}"
-            url = f"{base_url}/api/inbounds/update/{inbound_id}"
+            url = f"{base_url}/panel/api/inbounds/update/{inbound_id}"
             
             logger.info(f"ℹ️  Updating inbound at: {url}")
             
