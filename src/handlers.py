@@ -130,7 +130,7 @@ async def start_cmd(message: Message, bot: Bot):
             username=message.from_user.username,
             is_admin=is_admin
         )
-        await message.answer(f"Добро пожаловать в VPN бота `{(await bot.get_me()).full_name}`!\nВам предоставлен **бесплатный** тестовый период на **3 дня**!", parse_mode='Markdown')
+        await message.answer(f"Добро пожаловать в VPN бота `{(await bot.get_me()).full_name}`!\nВам предоставлен **бесплатный** тестовый период на **1 день**!", parse_mode='Markdown')
         await asyncio.sleep(2)
     
     # Обновляем данные если есть изменения
@@ -175,11 +175,14 @@ async def help_msg(callback: CallbackQuery):
     builder = InlineKeyboardBuilder()
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
     text = (
-        "Это бот для SWAGAVPN. Кредиты ниже.\n"
+        "Это бот для SWAGAVPN на протоколе XRAY (Vless + Reality). Кредиты ниже.\n"
         "<b>Разработчики:</b>\n"
         "@QueenDekim | @cpn_moris\n"
         "<i>Отдельное спасибо</i> @ascento <i>за помощь в разработке</i>\n"
-        "Я же выражаю личную благодарность всем контрибьютерам, т.к. благодаря им мне не нужно писать отдельного бота."
+        "Я же выражаю личную благодарность всем контрибьютерам, т.к. благодаря им мне не нужно писать отдельного бота.\n"
+        "Этот впн хостится @JekaKiller73 для ребят из штаба «СВАГА», если вы наткнулись на бота случайно, то вы всё ещё можете оплатить подписку, это дешёво.\n"
+        "Т.к. проект маленький — сервер всего 1, 1 айпи. Нет обхода белых списков (это дорого), и 100500 вариантов конфигов, бла-бла.\n"
+        "Ютуб и Дискорд работают, некоторые домены отказываются работать, т.к. считает айпи вредоносным (следствие дешевого сервера), но это у всех происходит, лечится заменой сервера."
         #"<a href='https://t.me/+OJsul9nc9hYzZjEy'>Официальный чат проекта</a>"
     )
     await callback.message.edit_text(text, parse_mode='HTML', reply_markup=builder.as_markup())
