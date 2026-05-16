@@ -389,8 +389,7 @@ async def admin_menu(callback: CallbackQuery):
         return
     
     total, with_sub, without_sub = await db_user_stats()
-    # online_count = await get_online_users()
-    online_count = 0
+    online_count = await get_online_users()
     text = (
         "**Административное меню**\n\n"
         f"**Всего пользователей**: `{total}`\n"
