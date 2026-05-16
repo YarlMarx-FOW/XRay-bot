@@ -44,7 +44,7 @@ async def create_user(telegram_id: int, full_name: str, username: str = None, is
             telegram_id=telegram_id,
             full_name=full_name,
             username=username,
-            subscription_end=datetime.utcnow() + timedelta(days=3),
+            subscription_end=datetime.utcnow() + timedelta(days=1),
             is_admin=is_admin
         )
         session.add(user)
